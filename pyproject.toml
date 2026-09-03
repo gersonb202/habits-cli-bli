@@ -23,3 +23,7 @@ include = ["habits*"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 
+
+[project.scripts]
+habit = "habits.cli:app"
+
