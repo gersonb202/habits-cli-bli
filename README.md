@@ -6,7 +6,7 @@ CLI local para crear, planificar y seguir hábitos directamente desde la termina
 
 - Python 3.12+
 
-## Instalación
+## Instalación (Nativa)
 
 Se recomienda el uso de entornos virtuales:
 
@@ -20,6 +20,28 @@ pip install -e .
 ```bash
 pip install -e ".[dev]"
 ```
+
+## Instalación con Docker
+
+También puedes ejecutar la CLI utilizando Docker y Docker Compose, sin necesidad de instalar Python en tu máquina local.
+
+**Características de la imagen Docker:**
+- Utiliza `python:3.12-slim` en un *multi-stage build* para una imagen ligera y segura.
+- Se ejecuta como usuario sin privilegios (`appuser`).
+- Persistencia asegurada: utiliza un volumen nombrado de Docker (`habits-data`) mapeado a `/home/appuser/.habits-cli`, para que la base de datos no se pierda al detener el contenedor.
+
+**Para construir la imagen:**
+```bash
+docker compose build
+```
+
+**Para ejecutar los comandos (usando `docker compose run`):**
+```bash
+docker compose run --rm habit new "Leer"
+docker compose run --rm habit plan 1 -f daily --days 7
+docker compose run --rm habit day
+```
+*Tip: Puedes crear un alias en tu sistema (ej. `alias habit='docker compose run --rm habit'`) para que se sienta como un comando local.*
 
 ## Uso
 

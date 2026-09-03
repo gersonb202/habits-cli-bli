@@ -1,0 +1,8 @@
+services:
+  habit:
+    build: .
+    volumes:
+      - habits-data:/home/appuser/.habits-cli
+
+volumes:
+  habits-data:
