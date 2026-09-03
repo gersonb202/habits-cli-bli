@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from datetime import date, timedelta
 import sqlite3
 
 from . import storage
@@ -67,3 +68,110 @@ def create_habit(
         )
 
     return storage.insert_habit(connection, name, description)
+
+
+def _as_date(value: date | str | None) -> date:
+    if value is None:
+        return date.today()
+    if isinstance(value, date):
+        return value
+    return date.fromisoformat(value)
+
+
+def assign_plan(
+    connection: sqlite3.Connection,
+    habit_id: int,
+    frequency: str,
+    days: int,
+    today: date | str | None = None,
+) -> Plan:
+    if days < 1:
+        raise ValueError("Los días deben ser mayores o iguales a 1.")
+
+    habit = storage.get_habit(connection, habit_id)
+    if habit is None:
+        raise ValueError("Hábito no encontrado.")
+
+    start_date = _as_date(today)
+    start_date_text = start_date.isoformat()
+    if storage.get_active_plan(connection, habit_id, start_date_text) is not None:
+        raise ValueError("El hábito ya tiene un plan activo.")
+
+    end_date_text = (start_date + timedelta(days=days - 1)).isoformat()
+    plan_id = storage.insert_plan(
+        connection,
+        habit_id,
+        frequency,
+        start_date_text,
+        end_date_text,
+        days,
+    )
+    return Plan(
+        id=plan_id,
+        habit_id=habit_id,
+        frequency=frequency,
+        start_date=start_date_text,
+        end_date=end_date_text,
+        total_days=days,
+    )
+
+
+def list_today(
+    connection: sqlite3.Connection,
+    today: date | str | None = None,
+) -> list[TodayHabit]:
+    today_text = _as_date(today).isoformat()
+    today_habits: list[TodayHabit] = []
+
+    for habit in storage.list_all_habits(connection):
+        plan = storage.get_active_plan(connection, habit["id"], today_text)
+        if plan is None:
+            if storage.get_plan_by_habit(connection, habit["id"]) is not None:
+                continue
+            status = "unplanned"
+        elif storage.get_completion(connection, habit["id"], today_text) is not None:
+            status = "completed"
+        else:
+            status = "pending"
+
+        today_habits.append(
+            TodayHabit(
+                id=habit["id"],
+                name=habit["name"],
+                description=habit["description"],
+                status=status,
+            )
+        )
+
+    return today_habits
+
+
+def mark_done(
+    connection: sqlite3.Connection,
+    habit_id: int,
+    today: date | str | None = None,
+) -> TodayHabit:
+    habit = storage.get_habit(connection, habit_id)
+    if habit is None:
+        raise ValueError("Hábito no encontrado.")
+
+    today_text = _as_date(today).isoformat()
+    plan = storage.get_active_plan(connection, habit_id, today_text)
+    if plan is None:
+        status = (
+            "needs_plan"
+            if storage.get_plan_by_habit(connection, habit_id) is None
+            else "unavailable"
+        )
+    elif storage.get_completion(connection, habit_id, today_text) is not None:
+        status = "already_completed"
+    else:
+        storage.insert_completion(connection, habit_id, today_text)
+        status = "completed"
+
+    return TodayHabit(
+        id=habit["id"],
+        name=habit["name"],
+        description=habit["description"],
+        status=status,
+    )
