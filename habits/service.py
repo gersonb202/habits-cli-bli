@@ -5,6 +5,9 @@ import sqlite3
 from . import storage
 
 
+CELEBRATION_MESSAGE = "¡Enhorabuena! Has completado tu hábito."
+
+
 @dataclass(frozen=True)
 class Habit:
 
@@ -42,6 +45,7 @@ class HabitReport:
     total_days: int
     progress: float
     description: str | None = None
+    status: str = "active"
 
 
 @dataclass(frozen=True)
@@ -175,3 +179,82 @@ def mark_done(
         description=habit["description"],
         status=status,
     )
+
+
+def get_report(
+    connection: sqlite3.Connection,
+    today: date | str | None = None,
+) -> list[HabitReport]:
+    today_text = _as_date(today).isoformat()
+    reports: list[HabitReport] = []
+
+    for habit in storage.list_all_habits(connection):
+        plan = storage.get_active_plan(connection, habit["id"], today_text)
+        if plan is None:
+            if storage.get_plan_by_habit(connection, habit["id"]) is not None:
+                continue
+            reports.append(
+                HabitReport(
+                    id=habit["id"],
+                    name=habit["name"],
+                    completed_days=0,
+                    total_days=0,
+                    progress=0.0,
+                    description=habit["description"],
+                    status="unplanned",
+                )
+            )
+            continue
+
+        completed_days = storage.count_completions(connection, habit["id"])
+        total_days = plan["total_days"]
+        reports.append(
+            HabitReport(
+                id=habit["id"],
+                name=habit["name"],
+                completed_days=completed_days,
+                total_days=total_days,
+                progress=completed_days / total_days,
+                description=habit["description"],
+                status="active",
+            )
+        )
+
+    return reports
+
+
+def get_celebrations(
+    connection: sqlite3.Connection,
+    today: date | str | None = None,
+) -> list[HabitCelebration]:
+    today_text = _as_date(today).isoformat()
+    celebrations: list[HabitCelebration] = []
+
+    for habit in storage.list_all_habits(connection):
+        plan = storage.get_plan_by_habit(connection, habit["id"])
+        if plan is None:
+            continue
+
+        active_plan = storage.get_active_plan(connection, habit["id"], today_text)
+        if active_plan is not None:
+            if active_plan["end_date"] != today_text:
+                continue
+            current_plan = active_plan
+        elif plan["end_date"] >= today_text:
+            continue
+        else:
+            current_plan = plan
+
+        completed_days = storage.count_completions(connection, habit["id"])
+        if completed_days != current_plan["total_days"]:
+            continue
+
+        celebrations.append(
+            HabitCelebration(
+                id=habit["id"],
+                name=habit["name"],
+                message=CELEBRATION_MESSAGE,
+            )
+        )
+
+    return celebrations
